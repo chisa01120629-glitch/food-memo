@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="食メモ">
+<title>食メモ</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku Gothic ProN',sans-serif;background:#f5f5f0;color:#222;min-height:100vh}
+.app{max-width:480px;margin:0 auto;padding:16px}
+h1{font-size:18px;font-weight:600;margin-bottom:16px;color:#222}
+.tabs-row{display:flex;gap:6px;margin-bottom:8px}
+.tab{flex:1;padding:9px 8px;border:1px solid #ddd;border-radius:10px;background:#fff;color:#888;font-size:13px;font-weight:500;cursor:pointer;text-align:center}
+.tab.active{background:#222;color:#fff;border-color:#222}
+.tab-count{display:inline-block;background:rgba(255,255,255,0.25);font-size:11px;padding:1px 5px;border-radius:8px;margin-left:3px}
+.tab:not(.active) .tab-count{background:#f0f0f0;color:#999}
+.status-tabs{display:flex;gap:6px;margin-bottom:14px}
+.stab{flex:1;padding:8px;border:1px solid #ddd;border-radius:10px;background:#fff;color:#888;font-size:13px;cursor:pointer;text-align:center}
+.stab.active{background:#f0ede8;color:#555;border-color:#ccc;font-weight:500}
+.add-btn{width:100%;padding:12px;border:1.5px dashed #ccc;border-radius:12px;background:transparent;color:#888;font-size:14px;cursor:pointer;margin-bottom:14px}
+.card{background:#fff;border:1px solid #eee;border-radius:14px;overflow:hidden;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,0.05)}
+.card-img{width:100%;height:160px;object-fit:cover;display:block}
+.card-body{padding:13px 15px}
+.card-name{font-size:15px;font-weight:600;color:#222;margin-bottom:4px}
+.card-meta{font-size:13px;color:#666;margin-bottom:2px}
+.card-note{font-size:13px;color:#999;font-style:italic;margin-top:4px}
+.card-url{font-size:12px;color:#4a7fe0;margin-top:4px;word-break:break-all;cursor:pointer}
+.card-actions{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.btn-sm{padding:6px 12px;font-size:12px;border:1px solid #ddd;border-radius:8px;background:#fff;color:#666;cursor:pointer}
+.btn-sm.done{color:#4caf50;border-color:#4caf50}
+.btn-sm.del{color:#e55;border-color:#e55}
+.tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:8px;margin-right:3px;margin-bottom:2px}
+.tag-area{background:#e8f5e9;color:#2e7d32}
+.tag-genre{background:#e3f2fd;color:#1565c0}
+.empty{text-align:center;padding:32px 16px;color:#bbb;font-size:14px}
+
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:100;display:flex;align-items:flex-end;justify-content:center}
+.modal{background:#fff;border-radius:20px 20px 0 0;padding:20px 18px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto}
+.modal-handle{width:36px;height:4px;background:#ddd;border-radius:2px;margin:0 auto 16px}
+.modal h3{font-size:16px;font-weight:600;margin-bottom:14px;color:#222}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:12px;color:#888;margin-bottom:4px}
+.field input,.field textarea,.field select{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:10px;background:#fff;color:#222;font-size:15px;font-family:inherit;-webkit-appearance:none}
+.field textarea{height:72px;resize:none}
+.photo-upload{width:100%;height:100px;border:1.5px dashed #ddd;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;color:#aaa;font-size:13px;gap:6px;background:#fafafa}
+.photo-preview{width:100%;height:130px;object-fit:cover;border-radius:10px;display:block}
+.photo-remove{font-size:12px;color:#e55;cursor:pointer;margin-top:6px;background:none;border:none;padding:0}
+.modal-btns{display:flex;gap:8px;margin-top:16px;padding-bottom:16px}
+.modal-btns button{flex:1;padding:13px;border-radius:12px;font-size:15px;cursor:pointer;font-family:inherit}
+.btn-save{background:#222;border:none;color:#fff;font-weight:500}
+.btn-cancel{background:#fff;border:1px solid #ddd;color:#888}
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>🍽 食メモ</h1>
+  <div class="tabs-row">
+    <button class="tab active" onclick="switchCat('restaurant')" id="cat-restaurant">飲食店 <span class="tab-count" id="cnt-r">0</span></button>
+    <button class="tab" onclick="switchCat('sweets')" id="cat-sweets">お菓子・スイーツ <span class="tab-count" id="cnt-s">0</span></button>
+  </div>
+  <div class="status-tabs">
+    <button class="stab active" onclick="switchStatus('want')" id="st-want">食べたい</button>
+    <button class="stab" onclick="switchStatus('ate')" id="st-ate">食べた</button>
+  </div>
+  <button class="add-btn" onclick="openModal()">＋ 追加する</button>
+  <div id="list"></div>
+</div>
+<div id="modal-area"></div>
+
+<script>
+const STORAGE_KEY = 'food-memo-v1';
+let currentCat = 'restaurant';
+let currentStatus = 'want';
+let data = {restaurant:{want:[],ate:[]}, sweets:{want:[],ate:[]}};
+let editId = null;
+let pendingPhoto = null;
+
+function loadData(){
+  try{
+    const s = localStorage.getItem(STORAGE_KEY);
+    if(s) data = JSON.parse(s);
+  }catch(e){}
+  render();
+}
+function saveData(){
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }catch(e){}
+}
+
+function switchCat(c){
+  currentCat=c;
+  document.getElementById('cat-restaurant').classList.toggle('active',c==='restaurant');
+  document.getElementById('cat-sweets').classList.toggle('active',c==='sweets');
+  render();
+}
+function switchStatus(s){
+  currentStatus=s;
+  document.getElementById('st-want').classList.toggle('active',s==='want');
+  document.getElementById('st-ate').classList.toggle('active',s==='ate');
+  render();
+}
+function allCount(cat){ return (data[cat]?.want?.length||0)+(data[cat]?.ate?.length||0); }
+
+function render(){
+  document.getElementById('cnt-r').textContent=allCount('restaurant');
+  document.getElementById('cnt-s').textContent=allCount('sweets');
+  const items=data[currentCat][currentStatus]||[];
+  const list=document.getElementById('list');
+  if(!items.length){ list.innerHTML='<div class="empty">まだ登録がありません</div>'; return; }
+  list.innerHTML=items.map(item=>`
+    <div class="card">
+      ${item.photo?`<img class="card-img" src="${item.photo}" alt="写真">`:''}
+      <div class="card-body">
+        <div class="card-name">${esc(item.name)}</div>
+        <div style="margin:4px 0">
+          ${item.area?`<span class="tag tag-area">${esc(item.area)}</span>`:''}
+          ${item.genre?`<span class="tag tag-genre">${esc(item.genre)}</span>`:''}
+        </div>
+        ${item.menu?`<div class="card-meta">メニュー: ${esc(item.menu)}</div>`:''}
+        ${item.note?`<div class="card-note">${esc(item.note)}</div>`:''}
+        ${item.url?`<div class="card-url" onclick="window.open('${esc(item.url)}','_blank')">${esc(item.url)}</div>`:''}
+        <div class="card-actions">
+          <button class="btn-sm" onclick="editItem('${item.id}')">編集</button>
+          ${currentStatus==='want'?`<button class="btn-sm done" onclick="markAte('${item.id}')">食べた！</button>`:''}
+          <button class="btn-sm del" onclick="deleteItem('${item.id}')">削除</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function findItem(id){
+  for(const cat of ['restaurant','sweets'])
+    for(const st of ['want','ate']){
+      const i=data[cat][st].findIndex(x=>x.id===id);
+      if(i>=0) return {cat,st,idx:i,item:data[cat][st][i]};
+    }
+  return null;
+}
+
+function openModal(id=null){
+  editId=id;
+  const found=id?findItem(id):null;
+  const item=found?found.item:{};
+  const selCat=found?found.cat:currentCat;
+  const selSt=found?found.st:currentStatus;
+  pendingPhoto=item.photo||null;
+  document.getElementById('modal-area').innerHTML=`
+    <div class="modal-overlay" onclick="handleOverlayClick(event)">
+      <div class="modal" id="modal-box">
+        <div class="modal-handle"></div>
+        <h3>${id?'編集':'新しく追加'}</h3>
+        <div class="field"><label>名前 *</label><input id="f-name" value="${esc(item.name||'')}" placeholder="例: 丸万焼鳥本店 / ザ・ロイズ" /></div>
+        <div class="field"><label>カテゴリ</label>
+          <select id="f-cat">
+            <option value="restaurant" ${selCat==='restaurant'?'selected':''}>飲食店</option>
+            <option value="sweets" ${selCat==='sweets'?'selected':''}>お菓子・スイーツ</option>
+          </select>
+        </div>
+        <div class="field"><label>エリア</label><input id="f-area" value="${esc(item.area||'')}" placeholder="例: 宮崎市、東京" /></div>
+        <div class="field"><label>ジャンル</label><input id="f-genre" value="${esc(item.genre||'')}" placeholder="例: 焼き鳥、チョコレート、和菓子" /></div>
+        <div class="field"><label>メニュー・商品名</label><input id="f-menu" value="${esc(item.menu||'')}" placeholder="例: チキン南蛮定食、生チョコ" /></div>
+        <div class="field"><label>メモ</label><textarea id="f-note" placeholder="感想・行きたい理由など">${esc(item.note||'')}</textarea></div>
+        <div class="field"><label>URL</label><input id="f-url" value="${esc(item.url||'')}" placeholder="https://..." /></div>
+        <div class="field">
+          <label>写真</label>
+          <div id="photo-area">${photoAreaHTML(item.photo||null)}</div>
+          <input type="file" id="f-photo" accept="image/*" style="display:none" onchange="handlePhoto(event)" />
+        </div>
+        <div class="field"><label>ステータス</label>
+          <select id="f-status">
+            <option value="want" ${selSt==='want'?'selected':''}>食べたい</option>
+            <option value="ate" ${selSt==='ate'?'selected':''}>食べた</option>
+          </select>
+        </div>
+        <div class="modal-btns">
+          <button class="btn-cancel" onclick="closeModal()">キャンセル</button>
+          <button class="btn-save" onclick="saveItem()">保存</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function photoAreaHTML(src){
+  if(src) return `<img class="photo-preview" src="${src}" alt="プレビュー"><button class="photo-remove" onclick="removePhoto()">写真を削除</button>`;
+  return `<div class="photo-upload" onclick="document.getElementById('f-photo').click()"><span style="font-size:24px">📷</span><span>写真を追加</span></div>`;
+}
+function handlePhoto(e){
+  const file=e.target.files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    pendingPhoto=ev.target.result;
+    document.getElementById('photo-area').innerHTML=photoAreaHTML(pendingPhoto);
+  };
+  reader.readAsDataURL(file);
+}
+function removePhoto(){ pendingPhoto=null; document.getElementById('photo-area').innerHTML=photoAreaHTML(null); }
+function handleOverlayClick(e){ if(!document.getElementById('modal-box').contains(e.target)) closeModal(); }
+function closeModal(){ document.getElementById('modal-area').innerHTML=''; editId=null; pendingPhoto=null; }
+
+function saveItem(){
+  const name=document.getElementById('f-name').value.trim();
+  if(!name){alert('名前を入力してください');return;}
+  const cat=document.getElementById('f-cat').value;
+  const status=document.getElementById('f-status').value;
+  const item={
+    id:editId||Date.now().toString(),
+    name,
+    area:document.getElementById('f-area').value.trim(),
+    genre:document.getElementById('f-genre').value.trim(),
+    menu:document.getElementById('f-menu').value.trim(),
+    note:document.getElementById('f-note').value.trim(),
+    url:document.getElementById('f-url').value.trim(),
+    photo:pendingPhoto||null,
+  };
+  if(editId){
+    for(const c of ['restaurant','sweets'])
+      for(const s of ['want','ate'])
+        data[c][s]=data[c][s].filter(x=>x.id!==editId);
+  }
+  data[cat][status].push(item);
+  saveData();
+  closeModal();
+  render();
+}
+
+function markAte(id){
+  const found=findItem(id);
+  if(!found)return;
+  const item=data[found.cat][found.st].splice(found.idx,1)[0];
+  data[found.cat]['ate'].push(item);
+  saveData();
+  render();
+}
+function deleteItem(id){
+  if(!confirm('削除しますか？'))return;
+  const found=findItem(id);
+  if(!found)return;
+  data[found.cat][found.st].splice(found.idx,1);
+  saveData();
+  render();
+}
+function editItem(id){ openModal(id); }
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+loadData();
+</script>
+</body>
+</html>
